@@ -57,8 +57,6 @@ svm_model.fit(X_train_f, y_train)
 svm_preds = svm_model.predict(X_test_f)
 print("✅ LinearSVC Accuracy:", accuracy_score(y_test, svm_preds))
 joblib.dump(svm_model, f"{MODEL_DIR}/svm.pkl")
-svm_preds = svm_model.predict(X_test_f)
-print("SVM Accuracy:", accuracy_score(y_test, svm_preds))
 
 
 # --- Random Forest ---
