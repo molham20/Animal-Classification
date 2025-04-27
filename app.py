@@ -1,150 +1,102 @@
-import os
 import numpy as np
-from PIL import Image
-from sklearn.model_selection import train_test_split
-from sklearn import svm, ensemble, neural_network
-from sklearn.metrics import classification_report
-import joblib
+import os
+import cv2
+import matplotlib.pyplot as plt
 import tensorflow as tf
-from tensorflow.keras.models import Sequential # type: ignore
-from tensorflow.keras.layers import Conv2D, MaxPooling2D, Flatten, Dense # type: ignore
-from tensorflow.keras.applications import ResNet50 # type: ignore
-from tensorflow.keras.applications.resnet50 import preprocess_input as resnet_preprocess # type: ignore
 import gradio as gr
-from sklearn.metrics import accuracy_score
-from sklearn.svm import LinearSVC
-
-# --- CONFIG ---
-IMG_SIZE = (64, 64)
-DATA_DIR = "animals/train"  # should contain subfolders like "cat", "dog", etc.
-MODEL_DIR = "models"
-os.makedirs(MODEL_DIR, exist_ok=True)
-
-print("Check1")
-
-# --- LOAD IMAGES ---
-def load_data(data_dir):
-    X, y = [], []
-    class_names = os.listdir(data_dir)
-    for label, class_name in enumerate(class_names):
-        class_dir = os.path.join(data_dir, class_name)
-        for img_name in os.listdir(class_dir):
-            img_path = os.path.join(class_dir, img_name)
-            try:
-                img = Image.open(img_path).convert('RGB').resize(IMG_SIZE)
-                X.append(np.array(img))
-                y.append(label)
-            except:
-                continue
-    return np.array(X), np.array(y), class_names
-
-print("Check2")
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
 
 
-X, y, class_names = load_data(DATA_DIR)
-X_flat = X.reshape(len(X), -1) / 255.0  # for ML models
-X_norm = X / 255.0  # for DL models
+class_names = ['Buffalo', 'cat', 'dog', 'Elephant', 'lion', 'Rhino', 'Zebra']
 
-X_train_f, X_test_f, y_train, y_test = train_test_split(X_flat, y, test_size=0.2, random_state=42)
-X_train_d, X_test_d, _, _ = train_test_split(X_norm, y, test_size=0.2, random_state=42)
+DATA_DIR = "Data"
 
-print("Check3")
+X = []
+y = []
 
+print("Loading images...")
+for idx, class_name in enumerate(class_names):
+    folder = os.path.join(DATA_DIR, class_name)
+    for filename in os.listdir(folder):
+        img_path = os.path.join(folder, filename)
+        img = cv2.imread(img_path)
+        if img is None:
+            continue
+        img = cv2.resize(img, (64, 64))
+        img = img / 255.0
+        X.append(img)
+        y.append(idx)
 
-# --- FAST SVM ---
-svm_model = LinearSVC()
-svm_model.fit(X_train_f, y_train)
-svm_preds = svm_model.predict(X_test_f)
-print("✅ LinearSVC Accuracy:", accuracy_score(y_test, svm_preds))
-joblib.dump(svm_model, f"{MODEL_DIR}/svm.pkl")
+X = np.array(X)
+y = np.array(y)
 
-
-# --- Random Forest ---
-rf_model = ensemble.RandomForestClassifier()
-rf_model.fit(X_train_f, y_train)
-joblib.dump(rf_model, f"{MODEL_DIR}/rf.pkl")
-rf_preds = rf_model.predict(X_test_f)
-print("Random Forest Accuracy:", accuracy_score(y_test, rf_preds))
-
-
-# --- MLP ---
-mlp_model = neural_network.MLPClassifier(max_iter=300)
-mlp_model.fit(X_train_f, y_train)
-joblib.dump(mlp_model, f"{MODEL_DIR}/mlp.pkl")
-mlp_preds = mlp_model.predict(X_test_f)
-print("MLP Accuracy:", accuracy_score(y_test, mlp_preds))
+print(f"Loaded {len(X)} images.")
 
 
-# --- CNN ---
-cnn_model = Sequential([
-    Conv2D(32, (3,3), activation='relu', input_shape=(128, 128, 3)),
-    MaxPooling2D(),
-    Flatten(),
-    Dense(64, activation='relu'),
-    Dense(len(class_names), activation='softmax')
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=38)
+
+
+model = tf.keras.Sequential([
+    tf.keras.layers.Conv2D(32, (3,3), activation='relu', input_shape=(64, 64, 3)),
+    tf.keras.layers.MaxPooling2D((2,2)),
+
+    tf.keras.layers.Conv2D(64, (3,3), activation='relu'),
+    tf.keras.layers.MaxPooling2D((2,2)),
+
+    tf.keras.layers.Conv2D(128, (3,3), activation='relu'),
+    tf.keras.layers.MaxPooling2D((2,2)),
+
+    tf.keras.layers.Flatten(),
+    tf.keras.layers.Dense(128, activation='relu'),
+    tf.keras.layers.Dense(len(class_names), activation='softmax')
 ])
-cnn_model.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['accuracy'])
-cnn_model.fit(X_train_d, y_train, validation_data=(X_test_d, y_test), epochs=5)
-cnn_model.save(f"{MODEL_DIR}/cnn.h5")
-cnn_loss, cnn_acc = cnn_model.evaluate(X_test_d, y_test, verbose=0)
-print("CNN Accuracy:", cnn_acc)
+
+model.compile(optimizer='adam',
+              loss='sparse_categorical_crossentropy',
+              metrics=['accuracy'])
 
 
-# --- ResNet50 ---
-resnet_base = ResNet50(weights='imagenet', include_top=False, input_shape=(128, 128, 3), pooling='avg')
-resnet_model = Sequential([
-    resnet_base,
-    Dense(128, activation='relu'),
-    Dense(len(class_names), activation='softmax')
-])
-resnet_model.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['accuracy'])
-resnet_model.fit(resnet_preprocess(X_train_d), y_train, validation_data=(resnet_preprocess(X_test_d), y_test), epochs=5)
-resnet_model.save(f"{MODEL_DIR}/resnet50.h5")
-resnet_loss, resnet_acc = resnet_model.evaluate(resnet_preprocess(X_test_d), y_test, verbose=0)
-print("ResNet50 Accuracy:", resnet_acc)
+history = model.fit(X_train, y_train, epochs=10, validation_data=(X_test, y_test))
 
 
-# --- PREDICTION FUNCTION ---
-def preprocess(image, flatten=False, use_resnet=False):
-    img = image.resize(IMG_SIZE).convert('RGB')
-    img_array = np.array(img)
-    if flatten:
-        return img_array.reshape(1, -1) / 255.0
-    elif use_resnet:
-        return resnet_preprocess(np.expand_dims(img_array, axis=0))
-    else:
-        return np.expand_dims(img_array / 255.0, axis=0)
+test_loss, test_acc = model.evaluate(X_test, y_test, verbose=2)
+print(f"Test Accuracy: {test_acc:.4f}")
 
-def predict(image, model_choice):
-    if model_choice == "SVM":
-        model = joblib.load(f"{MODEL_DIR}/svm.pkl")
-        processed = preprocess(image, flatten=True)
-        pred = model.predict(processed)[0]
-    elif model_choice == "Random Forest":
-        model = joblib.load(f"{MODEL_DIR}/rf.pkl")
-        processed = preprocess(image, flatten=True)
-        pred = model.predict(processed)[0]
-    elif model_choice == "MLP":
-        model = joblib.load(f"{MODEL_DIR}/mlp.pkl")
-        processed = preprocess(image, flatten=True)
-        pred = model.predict(processed)[0]
-    elif model_choice == "CNN":
-        model = tf.keras.models.load_model(f"{MODEL_DIR}/cnn.h5")
-        processed = preprocess(image)
-        pred = np.argmax(model.predict(processed), axis=1)[0]
-    elif model_choice == "ResNet50":
-        model = tf.keras.models.load_model(f"{MODEL_DIR}/resnet50.h5")
-        processed = preprocess(image, use_resnet=True)
-        pred = np.argmax(model.predict(processed), axis=1)[0]
-    return f"Prediction: {class_names[pred]}"
 
-# --- GRADIO GUI ---
-gr.Interface(
+print("Generating confusion matrix...")
+
+
+y_pred_probs = model.predict(X_test)
+y_pred_classes = np.argmax(y_pred_probs, axis=1)
+
+
+cm = confusion_matrix(y_test, y_pred_classes)
+disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=class_names)
+disp.plot(cmap=plt.cm.Blues, xticks_rotation=45)
+
+plt.title("Confusion Matrix")
+plt.show()
+
+
+
+
+def predict(image):
+    image = cv2.resize(image, (64, 64))
+    image = image / 255.0
+    image = image.reshape(1, 64, 64, 3)
+    
+    preds = model.predict(image)
+    pred_class = np.argmax(preds)
+    return class_names[pred_class]
+
+
+iface = gr.Interface(
     fn=predict,
-    inputs=[
-        gr.Image(type="pil", label="Upload Animal Image"),
-        gr.Dropdown(["SVM", "CNN", "ResNet50", "Random Forest", "MLP"], label="Choose Model")
-    ],
-    outputs="text",
-    title="Animal Classifier"
-).launch()
+    inputs=gr.Image(type="numpy", label="Upload an Animal Image"),
+    outputs=gr.Label(num_top_classes=3),  # نعرض أفضل 3 توقعات
+    title="Animal Classifier with CNN",
+    description=f"Simple CNN Model\nClasses: {', '.join(class_names)}"
+)
+
+iface.launch()
