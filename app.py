@@ -23,7 +23,7 @@ for idx, class_name in enumerate(class_names):
         img = cv2.imread(img_path)
         if img is None:
             continue
-        img = cv2.resize(img, (64, 64))
+        img = cv2.resize(img, (128, 128))
         img = img / 255.0
         X.append(img)
         y.append(idx)
@@ -38,19 +38,24 @@ X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_
 
 
 model = tf.keras.Sequential([
-    tf.keras.layers.Conv2D(32, (3,3), activation='relu', input_shape=(64, 64, 3)),
+    tf.keras.layers.Conv2D(32, (3,3), activation='relu', padding='same', input_shape=(128, 128, 3)),
     tf.keras.layers.MaxPooling2D((2,2)),
+    tf.keras.layers.Dropout(0.25),
 
-    tf.keras.layers.Conv2D(64, (3,3), activation='relu'),
+    tf.keras.layers.Conv2D(64, (3,3), activation='relu', padding='same'),
     tf.keras.layers.MaxPooling2D((2,2)),
+    tf.keras.layers.Dropout(0.25),
 
-    tf.keras.layers.Conv2D(128, (3,3), activation='relu'),
+    tf.keras.layers.Conv2D(128, (3,3), activation='relu', padding='same'),
     tf.keras.layers.MaxPooling2D((2,2)),
+    tf.keras.layers.Dropout(0.25),
 
     tf.keras.layers.Flatten(),
     tf.keras.layers.Dense(128, activation='relu'),
+    tf.keras.layers.Dropout(0.5),
     tf.keras.layers.Dense(len(class_names), activation='softmax')
 ])
+
 
 model.compile(optimizer='adam',
               loss='sparse_categorical_crossentropy',
@@ -82,9 +87,9 @@ plt.show()
 
 
 def predict(image):
-    image = cv2.resize(image, (64, 64))
+    image = cv2.resize(image, (128, 128))
     image = image / 255.0
-    image = image.reshape(1, 64, 64, 3)
+    image = image.reshape(1, 128, 128, 3)
     
     preds = model.predict(image)
     pred_class = np.argmax(preds)
