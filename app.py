@@ -8,7 +8,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
 
 
-class_names = ['Buffalo', 'cat', 'dog', 'Elephant', 'lion', 'Rhino', 'Zebra']
+class_names = ['Buffalo', 'cat', 'deer','dog', 'Elephant', 'horse','lion', 'Rhino', 'Zebra']
 
 DATA_DIR = "Data"
 
@@ -40,19 +40,15 @@ X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_
 model = tf.keras.Sequential([
     tf.keras.layers.Conv2D(32, (3,3), activation='relu', padding='same', input_shape=(128, 128, 3)),
     tf.keras.layers.MaxPooling2D((2,2)),
-    tf.keras.layers.Dropout(0.25),
 
     tf.keras.layers.Conv2D(64, (3,3), activation='relu', padding='same'),
     tf.keras.layers.MaxPooling2D((2,2)),
-    tf.keras.layers.Dropout(0.25),
 
     tf.keras.layers.Conv2D(128, (3,3), activation='relu', padding='same'),
     tf.keras.layers.MaxPooling2D((2,2)),
-    tf.keras.layers.Dropout(0.25),
 
     tf.keras.layers.Flatten(),
     tf.keras.layers.Dense(128, activation='relu'),
-    tf.keras.layers.Dropout(0.5),
     tf.keras.layers.Dense(len(class_names), activation='softmax')
 ])
 
@@ -85,7 +81,6 @@ plt.show()
 
 
 
-
 def predict(image):
     image = cv2.resize(image, (128, 128))
     image = image / 255.0
@@ -99,7 +94,7 @@ def predict(image):
 iface = gr.Interface(
     fn=predict,
     inputs=gr.Image(type="numpy", label="Upload an Animal Image"),
-    outputs=gr.Label(num_top_classes=3),  # نعرض أفضل 3 توقعات
+    outputs=gr.Label(num_top_classes=3),
     title="Animal Classifier with CNN",
     description=f"Simple CNN Model\nClasses: {', '.join(class_names)}"
 )
